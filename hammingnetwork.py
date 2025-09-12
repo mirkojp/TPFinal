@@ -3,120 +3,173 @@ import os
 from PIL import Image
 import matplotlib.pyplot as plt
 
+
 class HammingNetworkTrafficSigns:
-    def __init__(self, img_size=8, num_patterns=10):  # img_size: lado de la imagen cuadrada (ej. 8x8)
+    def __init__(self, img_size=100, num_patterns=3):
         """
-        Red de Hamming para señales de tránsito.
-        :param img_size: Tamaño de la imagen redimensionada (cuadrada).
-        :param num_patterns: Número máximo de patrones por clase (o total si no hay clases).
+        Red de Hamming para 3 clases: Pare, Ceda, Resalto.
+        :param img_size: Tamaño de la imagen (100x100).
+        :param num_patterns: Número de clases (3).
         """
         self.img_size = img_size
-        self.input_size = img_size * img_size  # Vector aplanado (binario)
-        self.weights = []  # Lista de patrones (uno por señal)
-        self.labels = []   # Etiquetas de las señales (ej. "stop", "yield")
-    
+        self.input_size = (
+            img_size * img_size
+        )  # Vector por defecto: 100x100 = 10,000 bits
+        self.weights = []  # Patrones (uno por clase)
+        self.labels = ["pare", "ceda", "resalto"]  # Clases fijas
+
     def _preprocess_image(self, image_path):
         """
-        Carga, redimensiona y binariza una imagen (escala de grises).
+        Carga y binariza una imagen en escala de grises.
         :param image_path: Ruta a la imagen.
         :return: Vector binario aplanado (-1,1).
         """
-        image = Image.open(image_path).convert('L')  # Convierte a escala de grises
-        image = image.resize((self.img_size, self.img_size))  # Redimensiona
-        gray = np.array(image)  # Matriz [img_size, img_size] con valores 0-255
+        image = Image.open(image_path).convert("L")  # Escala de grises
+        if image.size != (self.img_size, self.img_size):
+            raise ValueError(
+                f"La imagen debe ser {self.img_size}x{self.img_size} píxeles."
+            )
+
+        gray = np.array(image)  # Matriz [100, 100]
         binary = np.where(gray > 128, 1, 0)  # Binariza con umbral
-        flat = binary.flatten()
+        flat = binary.flatten()  # Vector de 10,000 elementos
         return np.where(flat == 0, -1, 1)  # A -1,1 para Hamming
-    
-    def train(self, dataset_dir, num_samples_per_class=5):
+
+    def _preprocess_image_rgb(self, image_path):
         """
-        Entrena con imágenes de un directorio (subdirectorios por clase).
-        Ejemplo estructura: dataset/stop/image1.png, dataset/yield/image2.png
+        Carga y binariza una imagen RGB (1 bit por canal).
+        :param image_path: Ruta a la imagen.
+        :return: Vector binario aplanado (-1,1) con 3 bits por píxel.
+        """
+        image = Image.open(image_path).convert("RGB")
+        if image.size != (self.img_size, self.img_size):
+            raise ValueError(
+                f"La imagen debe ser {self.img_size}x{self.img_size} píxeles."
+            )
+
+        rgb = np.array(image)  # Matriz [100, 100, 3]
+        binary = np.where(rgb > 128, 1, 0)  # Binariza R,G,B
+        flat = binary.flatten()  # Vector de 100x100x3 = 30,000 elementos
+        return np.where(flat == 0, -1, 1)
+
+    def train(self, dataset_dir, num_samples_per_class=3, use_rgb=False):
+        """
+        Entrena con imágenes de las clases pare, ceda, resalto.
         :param dataset_dir: Directorio del dataset.
-        :param num_samples_per_class: Muestras por clase para promediar patrones.
+        :param num_samples_per_class: Imágenes por clase para promediar.
+        :param use_rgb: Si True, usa RGB (3 bits/píxel); si False, escala de grises.
         """
-        classes = [d for d in os.listdir(dataset_dir) if os.path.isdir(os.path.join(dataset_dir, d))]
-        self.labels = classes
-        
-        for class_name in classes:
+        preprocess_fn = (
+            self._preprocess_image_rgb if use_rgb else self._preprocess_image
+        )
+        self.input_size = self.img_size * self.img_size * (3 if use_rgb else 1)
+
+        for class_name in self.labels:
             class_dir = os.path.join(dataset_dir, class_name)
-            images = [f for f in os.listdir(class_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
-            
+            if not os.path.exists(class_dir):
+                print(f"Error: La carpeta {class_dir} no existe.")
+                continue
+
+            images = [
+                f
+                for f in os.listdir(class_dir)
+                if f.lower().endswith((".png", ".jpg", ".jpeg", ".ppm"))
+            ]
+            if not images:
+                print(f"Error: No se encontraron imágenes en {class_name}.")
+                continue
             if len(images) < num_samples_per_class:
-                print(f"Advertencia: Clase {class_name} tiene pocas imágenes.")
+                print(
+                    f"Advertencia: Clase {class_name} tiene {len(images)} imágenes, usando todas."
+                )
                 num_samples_per_class = len(images)
-            
-            # Promedia num_samples_per_class imágenes para un patrón robusto por clase
+
+            # Promedia imágenes por clase
             class_patterns = []
-            for i in range(num_samples_per_class):
+            for i in range(min(num_samples_per_class, len(images))):
                 img_path = os.path.join(class_dir, images[i])
-                pattern = self._preprocess_image(img_path)
+                pattern = preprocess_fn(img_path)
                 class_patterns.append(pattern)
-            
-            # Promedia los patrones (para reducir ruido)
+
+            # Calcula el patrón promedio
             avg_pattern = np.mean(class_patterns, axis=0)
             avg_pattern = np.where(avg_pattern > 0, 1, -1)  # Redondea a -1 o 1
             self.weights.append(avg_pattern)
-        
-        print(f"Entrenado con {len(classes)} clases.")
-    
-    def classify(self, image_path):
+
+        if len(self.weights) != 3:
+            raise ValueError(
+                f"Se espeeraban 3 clases, pero se entrenaron {len(self.weights)}."
+            )
+        print("Entrenamiento completado para las clases: pare, ceda, resalto.")
+
+    def classify(self, image_path, use_rgb=False):
         """
         Clasifica una imagen de entrada.
         :param image_path: Ruta a la imagen de prueba.
-        :return: Etiqueta de la clase más cercana y distancia de Hamming.
+        :param use_rgb: Si True, usa RGB; si False, escala de grises.
+        :return: Etiqueta, distancia de Hamming, índice.
         """
-        input_pattern = self._preprocess_image(image_path)
-        
-        min_distance = float('inf')
+        preprocess_fn = (
+            self._preprocess_image_rgb if use_rgb else self._preprocess_image
+        )
+        input_pattern = preprocess_fn(image_path)
+
+        min_distance = float("inf")
         best_label = None
         best_index = -1
-        
+
         for i, weight in enumerate(self.weights):
-            # Distancia de Hamming: contar diferencias (o usar producto punto para similitud)
-            hamming_dist = np.sum(input_pattern != weight) / 2  # Normalizada
+            hamming_dist = np.sum(input_pattern != weight) / 2  # Distancia normalizada
             if hamming_dist < min_distance:
                 min_distance = hamming_dist
                 best_label = self.labels[i]
                 best_index = i
-        
+
         return best_label, min_distance, best_index
-    
-    def visualize(self, image_path, predicted_label, best_index):
+
+    def visualize(self, image_path, predicted_label, best_index, use_rgb=False):
         """
         Visualiza la imagen de entrada y el patrón predicho.
         """
-        input_img = Image.open(image_path).convert('L').resize((self.img_size, self.img_size))
-        input_array = np.array(input_img)
-        
-        pred_pattern = np.where(self.weights[best_index] == 1, 255, 0).reshape(self.img_size, self.img_size)
-        
-        fig, axs = plt.subplots(1, 3, figsize=(9, 3))
-        axs[0].imshow(input_array, cmap='gray')
-        axs[0].set_title('Entrada')
-        axs[1].imshow(pred_pattern, cmap='gray')
-        axs[1].set_title(f'Patrón: {predicted_label}')
-        axs[2].text(0.5, 0.5, f'Distancia Hamming: {predicted_label}', ha='center', va='center', transform=axs[2].transAxes)
-        axs[2].axis('off')
+        if use_rgb:
+            input_img = np.array(Image.open(image_path).convert("RGB"))
+            pred_pattern = np.where(self.weights[best_index] == 1, 255, 0).reshape(
+                self.img_size, self.img_size, 3
+            )
+        else:
+            input_img = np.array(Image.open(image_path).convert("L"))
+            pred_pattern = np.where(self.weights[best_index] == 1, 255, 0).reshape(
+                self.img_size, self.img_size
+            )
+
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8, 4))
+        ax1.imshow(input_img, cmap="gray" if not use_rgb else None)
+        ax1.set_title("Imagen de entrada")
+        ax2.imshow(pred_pattern, cmap="gray" if not use_rgb else None)
+        ax2.set_title(f"Predicción: {predicted_label}\nDistancia: {min_distance:.2f}")
         plt.show()
+
 
 # Ejemplo de uso
 if __name__ == "__main__":
-    # Asume un dataset simple en 'dataset/' con subdirs como 'stop', 'yield', etc.
-    # Descarga imágenes de señales y organízalas en subdirectorios por clase.
-    dataset_dir = "dataset/"  # Reemplaza con tu directorio
-    
-    # Crea la red (imágenes 8x8 para simplicidad)
-    net = HammingNetworkTrafficSigns(img_size=8, num_patterns=10)
-    
-    # Entrena (promedia 3 imágenes por clase)
-    net.train(dataset_dir, num_samples_per_class=3)
-    
+    # Configuración
+    dataset_dir = "dataset/"  # Reemplaza con la ruta a tu dataset
+    test_image_path = (
+        "dataset/test/test_0001.jpg"  # Reemplaza con tu imagen de prueba
+    )
+    img_size = 100
+    use_rgb = True  # Cambia a True para usar RGB (más lento, más preciso)
+
+    # Crea la red
+    net = HammingNetworkTrafficSigns(img_size=img_size, num_patterns=3)
+
+    # Entrena con 3 imágenes por clase
+    net.train(dataset_dir, num_samples_per_class=3, use_rgb=use_rgb)
+
     # Clasifica una imagen de prueba
-    test_image = "test_stop.png"  # Ruta a una imagen de prueba
-    label, distance, index = net.classify(test_image)
-    
-    print(f"Señal detectada: {label} (Distancia de Hamming: {distance:.2f})")
-    
+    label, min_distance, index = net.classify(test_image_path, use_rgb=use_rgb)
+
+    print(f"Señal detectada: {label} (Distancia de Hamming: {min_distance:.2f})")
+
     # Visualiza
-    net.visualize(test_image, label, index)
+    net.visualize(test_image_path, label, index, use_rgb=use_rgb)
