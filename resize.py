@@ -55,11 +55,6 @@ def resize_image(image_path, output_path, target_size=(100, 100)):
     print(f"Image saved to {output_path}")
 
 
-# Example usage for a single image
-# input_image = "Ceda0001.jpg"
-# output_image = "resized_image.jpg"
-# resize_image(input_image, output_image)
-
 # Example usage for a folder of images
 input_folder = "images/Resalto"
 output_folder = "images/Resalto Resized"
