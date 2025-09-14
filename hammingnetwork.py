@@ -1,142 +1,177 @@
 import numpy as np
 import os
+from pathlib import Path  # Added for robust path handling
 from PIL import Image
+import matplotlib
+
+# Set Matplotlib backend to ensure compatibility outside VSCode
+matplotlib.use(
+    "TkAgg"
+)  # Use TkAgg for interactive display; use 'Agg' for non-interactive
 import matplotlib.pyplot as plt
 import csv
 
 
 class HammingNetworkTrafficSigns:
-    def __init__(self, img_size=100, num_patterns=3):
+    def __init__(self, img_size=100, num_patterns=3, dataset_dir="dataset"):
         """
-        Red de Hamming para 3 clases: Pare, Ceda, Resalto.
-        :param img_size: Tamaño de la imagen (100x100).
-        :param num_patterns: Número de clases (3).
+        Hamming Network for 3 classes: Pare, Ceda, Resalto.
+        :param img_size: Image size (100x100).
+        :param num_patterns: Number of classes (3).
+        :param dataset_dir: Base dataset directory (configurable).
         """
         self.img_size = img_size
-        self.input_size = (
-            img_size * img_size
-        )  # Vector por defecto: 100x100 = 10,000 bits
-        self.weights = []  # Patrones (uno por clase)
-        self.labels = ["pare", "ceda", "resalto"]  # Clases fijas
-        self.output_dir = "dataset/test"  # Directorio para CSVs
-        os.makedirs(self.output_dir, exist_ok=True)  # Crear directorio si no existe
-        self.csv_input_path = os.path.join(
-            self.output_dir, "datainput.csv"
-        )  # Archivo CSV de entrada en dataset/test
-        self.csv_output_path = os.path.join(
-            self.output_dir, "dataoutput.csv"
-        )  # Archivo CSV de salida en dataset/test
+        self.input_size = img_size * img_size  # Default vector: 100x100 = 10,000 bits
+        self.weights = []  # Patterns (one per class)
+        self.labels = ["pare", "ceda", "resalto"]  # Fixed classes
+
+        # Use Path for cross-platform path handling
+        self.base_dir = Path(dataset_dir).resolve()  # Resolve to absolute path
+        self.output_dir = self.base_dir / "test"  # Use Path for directory joining
+        self.output_dir.mkdir(
+            parents=True, exist_ok=True
+        )  # Create directory if it doesn't exist
+        self.csv_input_path = self.output_dir / "datainput.csv"
+        self.csv_output_path = self.output_dir / "dataoutput.csv"
 
     def _preprocess_image(self, image_path):
         """
-        Carga y binariza una imagen en escala de grises.
+        Load and binarize a grayscale image.
         """
-        image = Image.open(image_path).convert("L")
-        if image.size != (self.img_size, self.img_size):
-            raise ValueError(
-                f"La imagen debe ser {self.img_size}x{self.img_size} píxeles."
-            )
+        try:
+            image_path = Path(image_path).resolve()  # Resolve to absolute path
+            if not image_path.exists():
+                raise FileNotFoundError(f"Image file {image_path} not found.")
+            image = Image.open(image_path).convert("L")
+            if image.size != (self.img_size, self.img_size):
+                raise ValueError(
+                    f"Image must be {self.img_size}x{self.img_size} pixels."
+                )
 
-        gray = np.array(image)
-        binary = np.where(gray > 128, 1, 0)
-        flat = binary.flatten()
-        return np.where(flat == 0, -1, 1)
+            gray = np.array(image)
+            binary = np.where(gray > 128, 1, 0)
+            flat = binary.flatten()
+            return np.where(flat == 0, -1, 1)
+        except FileNotFoundError as e:
+            print(f"Error: {e}")
+            raise
+        except Exception as e:
+            print(f"Error processing image {image_path}: {e}")
+            raise
 
-    def _preprocess_image_rgb(self, image_path, is_test=False):
+    def _preprocess_image_rgb(self, image_path):
         """
-        Carga y binariza una imagen RGB (1 bit por canal).
-        Si is_test=True, guarda el vector binarizado en el archivo CSV único.
+        Load and binarize an RGB image (1 bit per channel).
         """
-        image = Image.open(image_path).convert("RGB")
-        if image.size != (self.img_size, self.img_size):
-            raise ValueError(
-                f"La imagen debe ser {self.img_size}x{self.img_size} píxeles."
-            )
+        try:
+            image_path = Path(image_path).resolve()  # Resolve to absolute path
+            if not image_path.exists():
+                raise FileNotFoundError(f"Image file {image_path} not found.")
+            image = Image.open(image_path).convert("RGB")
+            if image.size != (self.img_size, self.img_size):
+                raise ValueError(
+                    f"Image must be {self.img_size}x{self.img_size} pixels."
+                )
 
-        rgb = np.array(image)
-        binary = np.where(rgb > 128, 1, 0)
-        flat = binary.flatten()
-        binarized = np.where(flat == 0, -1, 1)
-
-        return binarized
+            rgb = np.array(image)
+            binary = np.where(rgb > 128, 1, 0)
+            flat = binary.flatten()
+            binarized = np.where(flat == 0, -1, 1)
+            return binarized
+        except FileNotFoundError as e:
+            print(f"Error: {e}")
+            raise
+        except Exception as e:
+            print(f"Error processing image {image_path}: {e}")
+            raise
 
     def train(self, dataset_dir, num_samples_per_class=40, use_rgb=False):
         """
-        Entrena con imágenes de las clases pare, ceda, resalto.
+        Train with images from classes pare, ceda, resalto.
         """
+        dataset_dir = Path(dataset_dir).resolve()  # Resolve to absolute path
+        if not dataset_dir.exists():
+            print(f"Error: Dataset directory {dataset_dir} does not exist.")
+            return
+
         preprocess_fn = (
             self._preprocess_image_rgb if use_rgb else self._preprocess_image
         )
         self.input_size = self.img_size * self.img_size * (3 if use_rgb else 1)
 
-        print("Iniciando entrenamiento...")
-        print(f"Clases esperadas: {self.labels}")
+        print("Starting training...")
+        print(f"Expected classes: {self.labels}")
 
         for class_name in self.labels:
-            class_dir = os.path.join(dataset_dir, class_name)
-            if not os.path.exists(class_dir):
-                print(f"Error: La carpeta {class_dir} no existe.")
+            class_dir = dataset_dir / class_name
+            if not class_dir.exists():
+                print(f"Error: Directory {class_dir} does not exist.")
                 continue
 
             images = [
                 f
-                for f in os.listdir(class_dir)
-                if f.lower().endswith((".png", ".jpg", ".jpeg", ".ppm"))
+                for f in class_dir.iterdir()
+                if f.suffix.lower() in (".png", ".jpg", ".jpeg", ".ppm")
             ]
             if not images:
-                print(f"Error: No se encontraron imágenes en {class_name}.")
+                print(f"Error: No images found in {class_name}.")
                 continue
             if len(images) < num_samples_per_class:
                 print(
-                    f"Advertencia: Clase {class_name} tiene {len(images)} imágenes, usando todas."
+                    f"Warning: Class {class_name} has {len(images)} images, using all."
                 )
                 num_samples_per_class = len(images)
 
-            print(
-                f"Procesando clase: {class_name} ({len(images)} imágenes disponibles)"
-            )
+            print(f"Processing class: {class_name} ({len(images)} images available)")
             class_patterns = []
             for i in range(min(num_samples_per_class, len(images))):
-                img_path = os.path.join(class_dir, images[i])
-                print(f"  - Cargando imagen: {img_path}")
-                pattern = preprocess_fn(img_path)  # No se pasa is_test=True
-                class_patterns.append(pattern)
+                img_path = images[i]
+                print(f"  - Loading image: {img_path}")
+                try:
+                    pattern = preprocess_fn(img_path)
+                    class_patterns.append(pattern)
+                except Exception as e:
+                    print(f"  - Skipping image {img_path}: {e}")
+                    continue
 
-            # Promedia imágenes
-            avg_pattern = np.mean(class_patterns, axis=0)
-            avg_pattern = np.where(avg_pattern > 0, 1, -1)
-            self.weights.append(avg_pattern)
-            print(f"  - Patrón promedio para {class_name} almacenado.")
+            if class_patterns:
+                avg_pattern = np.mean(class_patterns, axis=0)
+                avg_pattern = np.where(avg_pattern > 0, 1, -1)
+                self.weights.append(avg_pattern)
+                print(f"  - Average pattern for {class_name} stored.")
+            else:
+                print(f"  - No valid patterns for {class_name}.")
 
         if len(self.weights) != 3:
-            raise ValueError(
-                f"Se esperaban 3 clases, pero se entrenaron {len(self.weights)}."
-            )
-        print("Entrenamiento completado.")
+            print(f"Warning: Expected 3 classes, but trained {len(self.weights)}.")
+        print("Training completed.")
 
     def classify(self, image_path, use_rgb=False):
         """
-        Clasifica una imagen de entrada.
+        Classify an input image.
         """
         preprocess_fn = (
             self._preprocess_image_rgb if use_rgb else self._preprocess_image
         )
-        input_pattern = preprocess_fn(image_path)
+        try:
+            input_pattern = preprocess_fn(image_path)
+        except Exception as e:
+            print(f"Error classifying {image_path}: {e}")
+            return "none", float("inf"), -1, 0
 
-        print(f"Clasificando imagen: {image_path}")
+        print(f"Classifying image: {image_path}")
         min_distance = float("inf")
         best_label = "none"
         best_index = -1
 
         for i, weight in enumerate(self.weights):
             hamming_dist = np.sum(input_pattern != weight) / 2
-            print(f"  - Distancia a clase {self.labels[i]}: {hamming_dist:.2f}")
+            print(f"  - Distance to class {self.labels[i]}: {hamming_dist:.2f}")
             if hamming_dist < min_distance:
                 min_distance = hamming_dist
                 best_label = self.labels[i]
                 best_index = i
 
-        # Always consider a pattern detected (Hamming network always chooses closest pattern)
         pattern_detected = 1
         detected_label = best_label
 
@@ -144,34 +179,34 @@ class HammingNetworkTrafficSigns:
 
     def inspect_network(self):
         """
-        Muestra las clases y variables de la red.
+        Display network classes and variables.
         """
-        print("\n=== Inspección de la red ===")
-        print(f"Tamaño de imagen: {self.img_size}x{self.img_size}")
-        print(f"Tamaño del vector de entrada: {self.input_size} bits")
-        print(f"Clases definidas: {self.labels}")
-        print(f"Número de patrones almacenados: {len(self.weights)}")
+        print("\n=== Network Inspection ===")
+        print(f"Image size: {self.img_size}x{self.img_size}")
+        print(f"Input vector size: {self.input_size} bits")
+        print(f"Defined classes: {self.labels}")
+        print(f"Number of stored patterns: {len(self.weights)}")
         if self.weights:
-            print("Detalles de los patrones:")
+            print("Pattern details:")
             for i, (label, weight) in enumerate(zip(self.labels, self.weights)):
-                print(f"  - Clase {label}: Patrón de {weight.shape[0]} bits")
-                print(f"    Ejemplo de primeros 10 bits: {weight[:10]}")
+                print(f"  - Class {label}: Pattern of {weight.shape[0]} bits")
+                print(f"    First 10 bits: {weight[:10]}")
         else:
-            print("  - No hay patrones almacenados (entrenamiento no realizado).")
+            print("  - No patterns stored (training not performed).")
 
     def visualize_patterns(self, use_rgb=False):
         """
-        Visualiza los patrones almacenados para cada clase.
+        Visualize stored patterns for each class.
         """
         if not self.weights:
-            print("Error: No hay patrones almacenados para visualizar.")
+            print("Error: No patterns stored to visualize.")
             return
 
         fig, axes = plt.subplots(
             1, len(self.weights), figsize=(4 * len(self.weights), 4)
         )
         if len(self.weights) == 1:
-            axes = [axes]  # Para una sola clase
+            axes = [axes]  # For single class
 
         for i, (weight, label) in enumerate(zip(self.weights, self.labels)):
             if use_rgb:
@@ -184,48 +219,59 @@ class HammingNetworkTrafficSigns:
                 )
 
             axes[i].imshow(pattern, cmap="gray" if not use_rgb else None)
-            axes[i].set_title(f"Patrón: {label}")
+            axes[i].set_title(f"Pattern: {label}")
             axes[i].axis("off")
         plt.show()
 
     def visualize(self, image_path, predicted_label, best_index, use_rgb=False):
         """
-        Visualiza la imagen de entrada y el patrón predicho.
+        Visualize input image and predicted pattern.
         """
-        if use_rgb:
-            input_img = np.array(Image.open(image_path).convert("RGB"))
-            pred_pattern = np.where(self.weights[best_index] == 1, 255, 0).reshape(
-                self.img_size, self.img_size, 3
-            )
-        else:
-            input_img = np.array(Image.open(image_path).convert("L"))
-            pred_pattern = np.where(self.weights[best_index] == 1, 255, 0).reshape(
-                self.img_size, self.img_size
-            )
+        try:
+            image_path = Path(image_path).resolve()  # Resolve to absolute path
+            if not image_path.exists():
+                raise FileNotFoundError(f"Image file {image_path} not found.")
+            if use_rgb:
+                input_img = np.array(Image.open(image_path).convert("RGB"))
+                pred_pattern = np.where(self.weights[best_index] == 1, 255, 0).reshape(
+                    self.img_size, self.img_size, 3
+                )
+            else:
+                input_img = np.array(Image.open(image_path).convert("L"))
+                pred_pattern = np.where(self.weights[best_index] == 1, 255, 0).reshape(
+                    self.img_size, self.img_size
+                )
 
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8, 4))
-        ax1.imshow(input_img, cmap="gray" if not use_rgb else None)
-        ax1.set_title("Imagen de entrada")
-        ax2.imshow(pred_pattern, cmap="gray" if not use_rgb else None)
-        ax2.set_title(f"Predicción: {predicted_label}")
-        plt.show()
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8, 4))
+            ax1.imshow(input_img, cmap="gray" if not use_rgb else None)
+            ax1.set_title("Input Image")
+            ax2.imshow(pred_pattern, cmap="gray" if not use_rgb else None)
+            ax2.set_title(f"Prediction: {predicted_label}")
+            plt.show()
+        except Exception as e:
+            print(f"Error visualizing {image_path}: {e}")
 
     def process_test_images(self, test_dir, use_rgb=False):
         """
-        Procesa las imágenes de prueba, carga datos desde datainput.csv y genera dataoutput.csv.
+        Process test images, load data from datainput.csv, and generate dataoutput.csv.
         """
-        if not os.path.exists(self.csv_input_path):
-            print(f"Error: El archivo {self.csv_input_path} no existe.")
+        test_dir = Path(test_dir).resolve()  # Resolve to absolute path
+        if not test_dir.exists():
+            print(f"Error: Test directory {test_dir} does not exist.")
+            return
+        if not self.csv_input_path.exists():
+            print(f"Error: File {self.csv_input_path} does not exist.")
             return
 
-        # Leer datainput.csv
+        # Read datainput.csv
         input_data = []
         try:
-            with open(self.csv_input_path, mode="r") as file:
+            with open(self.csv_input_path, mode="r", encoding="utf-8") as file:
                 reader = csv.reader(file)
+                next(reader, None)  # Skip header if present
                 for row in reader:
                     if len(row) < 3:
-                        print(f"Advertencia: Fila inválida en datainput.csv: {row}")
+                        print(f"Warning: Invalid row in datainput.csv: {row}")
                         continue
                     image_name, has_pattern, pattern = row[0], row[1], row[2]
                     input_data.append(
@@ -235,29 +281,26 @@ class HammingNetworkTrafficSigns:
                             "pattern": pattern,
                         }
                     )
-            print(f"Se leyeron {len(input_data)} entradas desde {self.csv_input_path}")
+            print(f"Read {len(input_data)} entries from {self.csv_input_path}")
         except Exception as e:
-            print(f"Error al leer {self.csv_input_path}: {e}")
+            print(f"Error reading {self.csv_input_path}: {e}")
             return
 
-        # Procesar imágenes y generar resultados
+        # Process images and generate results
         output_data = []
         for entry in input_data:
             image_name = entry["image_name"]
-            image_path = os.path.join(test_dir, image_name)
-            if not os.path.exists(image_path):
-                print(f"Error: La imagen {image_path} no existe.")
+            image_path = test_dir / image_name
+            if not image_path.exists():
+                print(f"Error: Image {image_path} does not exist.")
                 continue
 
-            print(f"\nProcesando imagen de prueba: {image_path}")
+            print(f"\nProcessing test image: {image_path}")
             label, min_distance, index, pattern_detected = self.classify(
                 image_path, use_rgb=use_rgb
             )
-            print(
-                f"Señal detectada: {label} (Distancia de Hamming: {min_distance:.2f})"
-            )
+            print(f"Detected signal: {label} (Hamming Distance: {min_distance:.2f})")
 
-            # Guardar resultados
             output_data.append(
                 [
                     image_name,
@@ -268,14 +311,14 @@ class HammingNetworkTrafficSigns:
                 ]
             )
 
-            # Visualizar
             self.visualize(image_path, label, index, use_rgb=use_rgb)
 
-        # Guardar resultados en dataoutput.csv
+        # Save results to dataoutput.csv
         try:
-            with open(self.csv_output_path, mode="w", newline="") as file:
+            with open(
+                self.csv_output_path, mode="w", newline="", encoding="utf-8"
+            ) as file:
                 writer = csv.writer(file)
-                # Escribir encabezado
                 writer.writerow(
                     [
                         "image_name",
@@ -285,38 +328,62 @@ class HammingNetworkTrafficSigns:
                         "detected_pattern",
                     ]
                 )
-                # Escribir datos
                 writer.writerows(output_data)
-            print(f"Resultados guardados en: {self.csv_output_path}")
+            print(f"Results saved to: {self.csv_output_path}")
         except Exception as e:
-            print(f"Error al guardar {self.csv_output_path}: {e}")
+            print(f"Error saving {self.csv_output_path}: {e}")
 
 
-# Ejemplo de uso
 if __name__ == "__main__":
-    # Configuración
-    dataset_dir = "dataset/"  # Ruta al dataset
-    test_dir = os.path.join(dataset_dir, "test")  # Directorio de imágenes de prueba
+    """
+    Example usage of HammingNetworkTrafficSigns.
+    Ensure the following dependencies are installed:
+    pip install numpy pillow matplotlib
+    Dataset structure:
+    dataset/
+    ├── pare/
+    ├── ceda/
+    ├── resalto/
+    ├── test/
+    └── test/datainput.csv
+    """
+    # Configuration
+    script_dir = Path(__file__).parent  # Get the directory of the script
+    dataset_dir = script_dir / "dataset"  # Use script's directory as base
+    test_dir = dataset_dir / "test"  # Test images directory
+    print(f"Dataset directory: {dataset_dir}")
+    print(f"Test directory: {test_dir}")
     img_size = 100
-    use_rgb = True  # Usar RGB para procesar imágenes
+    use_rgb = True  # Use RGB for image processing
 
-    # Crea la red
-    net = HammingNetworkTrafficSigns(img_size=img_size, num_patterns=3)
+    # Create network
+    net = HammingNetworkTrafficSigns(
+        img_size=img_size, num_patterns=3, dataset_dir=dataset_dir
+    )
 
-    # Inspecciona antes del entrenamiento
-    print("Antes del entrenamiento:")
+    # Inspect before training
+    print("Before training:")
     net.inspect_network()
 
-    # Entrena
-    net.train(dataset_dir, num_samples_per_class=25, use_rgb=use_rgb)
+    # Train
+    try:
+        net.train(dataset_dir, num_samples_per_class=25, use_rgb=use_rgb)
+    except Exception as e:
+        print(f"Training failed: {e}")
 
-    # Inspecciona después del entrenamiento
-    print("\nDespués del entrenamiento:")
+    # Inspect after training
+    print("\nAfter training:")
     net.inspect_network()
 
-    # Visualiza los patrones almacenados
-    print("\nVisualizando patrones almacenados:")
-    net.visualize_patterns(use_rgb=use_rgb)
+    # Visualize stored patterns
+    print("\nVisualizing stored patterns:")
+    try:
+        net.visualize_patterns(use_rgb=use_rgb)
+    except Exception as e:
+        print(f"Visualization failed: {e}")
 
-    # Procesa imágenes de prueba y genera dataoutput.csv
-    net.process_test_images(test_dir, use_rgb=use_rgb)
+    # Process test images and generate dataoutput.csv
+    try:
+        net.process_test_images(test_dir, use_rgb=use_rgb)
+    except Exception as e:
+        print(f"Test processing failed: {e}")

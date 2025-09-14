@@ -56,8 +56,8 @@ def resize_image(image_path, output_path, target_size=(100, 100)):
 
 
 # Example usage for a folder of images
-input_folder = "images/Resalto"
-output_folder = "images/Resalto Resized"
+input_folder = "images/nuevas"
+output_folder = "images/nuevas Resized"
 os.makedirs(output_folder, exist_ok=True)
 
 for filename in os.listdir(input_folder):
