@@ -49,18 +49,8 @@ pip install numpy pandas matplotlib seaborn scikit-learn pillow opencv-python
 
 ## Uso
 
-1. **Preparar el dataset:**  
-   Coloca las imágenes de cada clase en las carpetas correspondientes dentro de `dataset/`.  
-   Prepara el archivo `datainput.csv` en `dataset/test/` con la información de las imágenes de prueba.
 
-2. **Redimensionar imágenes:**  
-   Ejecuta `resize.py` para ajustar todas las imágenes al tamaño estándar.
-
-   ```bash
-   python resize.py
-   ```
-
-3. **Entrenar y probar la red:**  
+1. **Entrenar y probar la red:**  
    Ejecuta `hammingnetwork.py` para entrenar la red y procesar las imágenes de prueba.
 
    ```bash
@@ -69,7 +59,7 @@ pip install numpy pandas matplotlib seaborn scikit-learn pillow opencv-python
 
    Esto generará el archivo `dataoutput.csv` con los resultados de la clasificación.
 
-4. **Evaluar resultados:**  
+2. **Evaluar resultados:**  
    Ejecuta `metrics.py` para obtener métricas de desempeño.
 
    ```bash
