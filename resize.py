@@ -2,33 +2,41 @@ import cv2
 import numpy as np
 import os
 
-
 def resize_image(image_path, output_path, target_size=(100, 100)):
-    # Load the image
+    """
+    Redimensiona una imagen manteniendo la relación de aspecto y la ajusta a un tamaño objetivo.
+    Si la imagen redimensionada es más pequeña que el tamaño objetivo, la centra en un lienzo negro.
+
+    Args:
+        image_path (str): Ruta de la imagen de entrada.
+        output_path (str): Ruta donde se guardará la imagen procesada.
+        target_size (tuple): Tamaño objetivo en píxeles (ancho, alto).
+    """
+    # Carga la imagen
     image = cv2.imread(image_path)
     if image is None:
         print(f"Error: Could not load image {image_path}")
         return
 
-    # Get original dimensions
+    # Obtiene las dimensiones originales
     h, w = image.shape[:2]
     target_w, target_h = target_size
 
-    # Calculate aspect ratio
+    # Calcula la relación de aspecto
     aspect_ratio = w / h
     target_aspect = target_w / target_h
 
-    # Resize while preserving aspect ratio
+    # Redimensiona manteniendo la relación de aspecto
     if aspect_ratio > target_aspect:
-        # Image is wider than target, fit to width
+        # Imagen más ancha que el objetivo, ajusta al ancho
         new_w = target_w
         new_h = int(target_w / aspect_ratio)
     else:
-        # Image is taller than target, fit to height
+        # Imagen más alta que el objetivo, ajusta al alto
         new_h = target_h
         new_w = int(target_h * aspect_ratio)
 
-    # Resize image
+    # Redimensiona la imagen
     resized_image = cv2.resize(
         image,
         (new_w, new_h),
@@ -37,25 +45,24 @@ def resize_image(image_path, output_path, target_size=(100, 100)):
         ),
     )
 
-    # If image is smaller than 100x100, pad it with black pixels
+    # Si la imagen es más pequeña que el objetivo, la centra en un lienzo negro
     if new_w < target_w or new_h < target_h:
-        # Create a black canvas of target size
+        # Crea un lienzo negro del tamaño objetivo
         canvas = np.zeros((target_h, target_w, 3), dtype=np.uint8)
-        # Calculate padding
+        # Calcula el padding para centrar la imagen
         x_offset = (target_w - new_w) // 2
         y_offset = (target_h - new_h) // 2
-        # Place resized image on canvas
+        # Coloca la imagen redimensionada en el lienzo
         canvas[y_offset : y_offset + new_h, x_offset : x_offset + new_w] = resized_image
         final_image = canvas
     else:
         final_image = resized_image
 
-    # Save the output image
+    # Guarda la imagen procesada
     cv2.imwrite(output_path, final_image)
     print(f"Image saved to {output_path}")
 
-
-# Example usage for a folder of images
+# Procesa todas las imágenes de una carpeta
 input_folder = "images/nuevas"
 output_folder = "images/nuevas Resized"
 os.makedirs(output_folder, exist_ok=True)
