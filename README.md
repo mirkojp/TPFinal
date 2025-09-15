@@ -18,9 +18,6 @@ TPFinal/
 ├── metrics.py
 ├── README.md
 ```
-## Link al repositorio de github
-
-[Repositorio de GitHub](https://github.com/mirkojp/TPFinal/edit/main/README.md)
 
 ## Scripts Principales
 
@@ -68,4 +65,7 @@ pip install numpy pandas matplotlib seaborn scikit-learn pillow opencv-python
    ```bash
    python metrics.py
    ```
+
+[Repositorio de GitHub](https://github.com/mirkojp/TPFinal/edit/main/README.md)
+
 
