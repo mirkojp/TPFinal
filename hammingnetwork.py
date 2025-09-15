@@ -1,29 +1,24 @@
 import numpy as np
 import os
-from pathlib import Path  # Manejo robusto de rutas
+from pathlib import Path  # Added for robust path handling
+from PIL import Image
 import matplotlib
 
-# Configura el backend de Matplotlib para compatibilidad fuera de VSCode
+# Set Matplotlib backend to ensure compatibility outside VSCode
 matplotlib.use(
     "TkAgg"
-)   # Usa TkAgg para display interactivo; 'Agg' para no interactivo
+)  # Use TkAgg for interactive display; use 'Agg' for non-interactive
 import matplotlib.pyplot as plt
 import csv
 
 
 class HammingNetworkTrafficSigns:
-    """
-    Implementa una red de Hamming para reconocimiento de señales de tránsito.
-    Permite entrenar con imágenes de tres clases (pare, ceda, resalto), clasificar nuevas imágenes,
-    visualizar patrones y procesar lotes de imágenes de prueba.
-    """
     def __init__(self, img_size=100, num_patterns=3, dataset_dir="dataset"):
         """
-        Inicializa la red de Hamming.
-        Args:
-            img_size (int): Tamaño de las imágenes (ancho/alto en píxeles).
-            num_patterns (int): Número de clases/patrones.
-            dataset_dir (str or Path): Directorio base del dataset.
+        Hamming Network for 3 classes: Pare, Ceda, Resalto.
+        :param img_size: Image size (100x100).
+        :param num_patterns: Number of classes (3).
+        :param dataset_dir: Base dataset directory (configurable).
         """
         self.img_size = img_size
         self.input_size = img_size * img_size  # Default vector: 100x100 = 10,000 bits
@@ -41,11 +36,7 @@ class HammingNetworkTrafficSigns:
 
     def _preprocess_image(self, image_path):
         """
-        Carga y binariza una imagen en escala de grises.
-        Args:
-            image_path (str or Path): Ruta de la imagen.
-        Returns:
-            np.ndarray: Vector binarizado (-1, 1).
+        Load and binarize a grayscale image.
         """
         try:
             image_path = Path(image_path).resolve()  # Resolve to absolute path
@@ -70,11 +61,7 @@ class HammingNetworkTrafficSigns:
 
     def _preprocess_image_rgb(self, image_path):
         """
-        Carga y binariza una imagen RGB (1 bit por canal).
-        Args:
-            image_path (str or Path): Ruta de la imagen.
-        Returns:
-            np.ndarray: Vector binarizado (-1, 1).
+        Load and binarize an RGB image (1 bit per channel).
         """
         try:
             image_path = Path(image_path).resolve()  # Resolve to absolute path
@@ -100,11 +87,6 @@ class HammingNetworkTrafficSigns:
 
     def train(self, dataset_dir, num_samples_per_class=40, use_rgb=False):
         """
-        Entrena la red con imágenes de las clases definidas.
-        Args:
-            dataset_dir (str or Path): Directorio con subcarpetas de cada clase.
-            num_samples_per_class (int): Número de imágenes por clase.
-            use_rgb (bool): Si True, usa imágenes RGB.
         Train with images from classes pare, ceda, resalto.
         """
         dataset_dir = Path(dataset_dir).resolve()  # Resolve to absolute path
@@ -166,12 +148,7 @@ class HammingNetworkTrafficSigns:
 
     def classify(self, image_path, use_rgb=False):
         """
-        Clasifica una imagen de entrada.
-        Args:
-            image_path (str or Path): Ruta de la imagen.
-            use_rgb (bool): Si True, usa procesamiento RGB.
-        Returns:
-            Tuple: (etiqueta detectada, distancia de Hamming, índice de clase, flag de detección)
+        Classify an input image.
         """
         preprocess_fn = (
             self._preprocess_image_rgb if use_rgb else self._preprocess_image
@@ -202,7 +179,7 @@ class HammingNetworkTrafficSigns:
 
     def inspect_network(self):
         """
-        Muestra información sobre la red y los patrones almacenados.
+        Display network classes and variables.
         """
         print("\n=== Network Inspection ===")
         print(f"Image size: {self.img_size}x{self.img_size}")
@@ -219,9 +196,7 @@ class HammingNetworkTrafficSigns:
 
     def visualize_patterns(self, use_rgb=False):
         """
-         Visualiza los patrones almacenados para cada clase.
-        Args:
-            use_rgb (bool): Si True, muestra patrones en RGB.
+        Visualize stored patterns for each class.
         """
         if not self.weights:
             print("Error: No patterns stored to visualize.")
@@ -250,12 +225,7 @@ class HammingNetworkTrafficSigns:
 
     def visualize(self, image_path, predicted_label, best_index, use_rgb=False):
         """
-        Visualiza la imagen de entrada y el patrón predicho.
-        Args:
-            image_path (str or Path): Ruta de la imagen.
-            predicted_label (str): Etiqueta predicha.
-            best_index (int): Índice del patrón predicho.
-            use_rgb (bool): Si True, muestra en RGB.
+        Visualize input image and predicted pattern.
         """
         try:
             image_path = Path(image_path).resolve()  # Resolve to absolute path
@@ -283,10 +253,7 @@ class HammingNetworkTrafficSigns:
 
     def process_test_images(self, test_dir, use_rgb=False):
         """
-        Procesa imágenes de prueba, lee datainput.csv y genera dataoutput.csv con resultados.
-        Args:
-            test_dir (str or Path): Directorio de imágenes de prueba.
-            use_rgb (bool): Si True, usa procesamiento RGB.
+        Process test images, load data from datainput.csv, and generate dataoutput.csv.
         """
         test_dir = Path(test_dir).resolve()  # Resolve to absolute path
         if not test_dir.exists():
@@ -369,15 +336,16 @@ class HammingNetworkTrafficSigns:
 
 if __name__ == "__main__":
     """
-    Ejemplo de uso de HammingNetworkTrafficSigns.
-    Requisitos: numpy, pillow, matplotlib.
-    Estructura esperada del dataset:
+    Example usage of HammingNetworkTrafficSigns.
+    Ensure the following dependencies are installed:
+    pip install numpy pillow matplotlib
+    Dataset structure:
     dataset/
-        pare/
-        ceda/
-        resalto/
-        test/
-        test/datainput.csv
+    ├── pare/
+    ├── ceda/
+    ├── resalto/
+    ├── test/
+    └── test/datainput.csv
     """
     # Configuration
     script_dir = Path(__file__).parent  # Get the directory of the script
