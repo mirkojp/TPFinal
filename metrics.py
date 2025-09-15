@@ -3,72 +3,103 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix, precision_score, classification_report
 import numpy as np
+from pathlib import Path
+import sys
 
-# Carga el archivo CSV con los datos de prueba
-df = pd.read_csv("dataset/test/dataoutput.csv")
+# Define the path to the CSV file dynamically
+# Assumes the CSV is in a 'dataset/test' subdirectory relative to the script
+BASE_DIR = Path(__file__).resolve().parent  # Get the directory of the current script
+CSV_PATH = BASE_DIR / "dataset" / "test" / "dataoutput.csv"
 
 
-def get_true_label(row):
+# Function to load the CSV with error handling
+def load_data(file_path):
     """
-    Devuelve la etiqueta verdadera para una fila del DataFrame.
-    Si 'has_pattern' es 0, retorna 'none', de lo contrario retorna el valor de 'pattern'.
+    Load the CSV file with error handling.
 
     Args:
-        row (pd.Series): Fila del DataFrame.
+        file_path (Path): Path to the CSV file.
 
     Returns:
-        str: Etiqueta verdadera.
+        pd.DataFrame: Loaded DataFrame or None if loading fails.
     """
-    if row["has_pattern"] == 0:
-        return "none"
-    else:
-        return row["pattern"]
+    try:
+        if not file_path.exists():
+            raise FileNotFoundError(f"The file {file_path} does not exist.")
+        df = pd.read_csv(file_path)
+        return df
+    except FileNotFoundError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+    except pd.errors.EmptyDataError:
+        print(f"Error: The file {file_path} is empty.")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error loading file {file_path}: {e}")
+        sys.exit(1)
+
+
+# Functions to get true and predicted labels
+def get_true_label(row):
+    """
+    Return the true label for a DataFrame row.
+    If 'has_pattern' is 0, return 'none', else return the value of 'pattern'.
+
+    Args:
+        row (pd.Series): DataFrame row.
+
+    Returns:
+        str: True label.
+    """
+    return "none" if row["has_pattern"] == 0 else row["pattern"]
 
 
 def get_pred_label(row):
     """
-    Devuelve la etiqueta predicha para una fila del DataFrame.
-    Si 'pattern_detected' es 0, retorna 'none', de lo contrario retorna el valor de 'detected_pattern'.
+    Return the predicted label for a DataFrame row.
+    If 'pattern_detected' is 0, return 'none', else return the value of 'detected_pattern'.
 
     Args:
-        row (pd.Series): Fila del DataFrame.
+        row (pd.Series): DataFrame row.
 
     Returns:
-        str: Etiqueta predicha.
+        str: Predicted label.
     """
-    if row["pattern_detected"] == 0:
-        return "none"
-    else:
-        return row["detected_pattern"]
+    return "none" if row["pattern_detected"] == 0 else row["detected_pattern"]
 
 
-# Aplica las funciones de mapeo para obtener las etiquetas verdaderas y predichas
+# Load the dataset
+df = load_data(CSV_PATH)
+if df is None:
+    sys.exit(1)  # Exit if data loading failed
+
+# Apply the label mapping functions
 df["true_label"] = df.apply(get_true_label, axis=1)
 df["pred_label"] = df.apply(get_pred_label, axis=1)
 
-# Define las clases posibles, incluyendo 'none'
+# Define possible classes, including 'none'
 classes = ["none", "ceda", "resalto", "pare"]
 
-# Muestra las etiquetas únicas presentes en los datos
+# Print unique labels present in the data
 all_true = df["true_label"].unique()
 all_pred = df["pred_label"].unique()
 print(f"Unique true labels: {all_true}")
 print(f"Unique predicted labels: {all_pred}")
 
-# Calcula la matriz de confusión usando las clases definidas
+# Calculate the confusion matrix
 cm = confusion_matrix(df["true_label"], df["pred_label"], labels=classes)
 
-# Imprime la matriz de confusión
+# Print the confusion matrix
 print("Confusion Matrix:")
 print(cm)
 
-# Calcula la precisión macro (promedio entre clases)
+# Calculate macro precision
 precision = precision_score(
     df["true_label"], df["pred_label"], labels=classes, average="macro", zero_division=0
 )
 print(f"\nMacro Precision: {precision:.4f}")
 
-# Imprime el reporte de clasificación detallado (precision, recall, f1-score por clase)
+# Print detailed classification report
 print("\nClassification Report:")
 print(
     classification_report(
@@ -76,7 +107,7 @@ print(
     )
 )
 
-# Grafica la matriz de confusión como un mapa de calor
+# Plot the confusion matrix as a heatmap
 plt.figure(figsize=(8, 6))
 sns.heatmap(
     cm, annot=True, fmt="d", cmap="Blues", xticklabels=classes, yticklabels=classes
