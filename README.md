@@ -18,6 +18,9 @@ TPFinal/
 ├── metrics.py
 ├── README.md
 ```
+## Link al repositorio de github
+
+[Repositorio de GitHub](https://github.com/mirkojp/TPFinal/edit/main/README.md)
 
 ## Scripts Principales
 
